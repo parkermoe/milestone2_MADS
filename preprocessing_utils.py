@@ -68,3 +68,5 @@ def MVAnalyzer(df, target, height=1000, margin=dict(l=20, r=20, t=50, b=20)):
 
     # Show the figure
     fig.show()
+
+"""" Adding test"""
