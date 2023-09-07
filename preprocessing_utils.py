@@ -1,7 +1,19 @@
-import plotly.graph_objects as go
 import pandas as pd
+import plotly.graph_objs as go
 
 def MVAnalyzer(df, target, height=1000, margin=dict(l=20, r=20, t=50, b=20)):
+    """
+    Generate a heatmap to visualize missing values in a pandas DataFrame.
+
+    Parameters:
+    df (pandas.DataFrame): The DataFrame to analyze.
+    target (str): The name of the target column.
+    height (int): The height of the plot in pixels. Default is 1000.
+    margin (dict): The margin of the plot. Default is {'l': 20, 'r': 20, 't': 50, 'b': 20}.
+
+    Returns:
+    None
+    """
     # Generate a matrix to represent missing values
     missing_matrix = df.isnull().astype(int)
     
