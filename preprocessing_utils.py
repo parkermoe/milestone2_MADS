@@ -69,5 +69,75 @@ def MVAnalyzer(df, target, height=1000, margin=dict(l=20, r=20, t=50, b=20)):
     # Show the figure
     fig.show()
 
-"""" Adding test"""
-"Workiong on branch"
+import numpy as np
+import pandas as pd
+import plotly.express as px
+def standardize_missing_values(df):
+    """
+    Standardizes and handles missing values in a DataFrame.
+    
+    Parameters:
+    - df: Input dataframe.
+    
+    Returns:
+    - df_cleaned: DataFrame after standardizing and handling missing values.
+    """
+    
+    # Replace blank strings and strings with only spaces with np.nan
+    df.replace(["", " ", "nan", "NaN", "N/A", "NA"], np.nan, inplace=True)
+    
+    # Replace any string consisting only of whitespace with np.nan
+    df.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+    
+    return df
+
+def plot_missing_values(df):
+    # Calculate the percentage of missing values for each column
+    missing_percentage = (df.isnull().sum() / len(df)) * 100
+    missing_data = pd.DataFrame({'Column': missing_percentage.index, 'Missing Percentage': missing_percentage.values})
+
+    # Filter out columns with 0% missing values to declutter the visualization
+    missing_data = missing_data[missing_data['Missing Percentage'] > 0]
+
+    # Create an interactive bar chart
+    fig = px.bar(missing_data, x='Column', y='Missing Percentage', title='Percentage of Missing Values by Column',
+                 labels={'Column': 'Columns', 'Missing Percentage': 'Percentage (%)'}, height=600)
+
+    return fig.show()
+
+def remove_columns_over_threshold(df, threshold=20):
+    """
+    Removes columns from the dataframe where missing values exceed the given threshold.
+    
+    Parameters:
+    - df: Input dataframe.
+    - threshold: Threshold percentage of missing values to decide column removal.
+    
+    Returns:
+    - df_cleaned: Dataframe after columns exceeding the threshold are removed.
+    """
+    
+    # Calculate the percentage of missing values for each column
+    missing_percentage = (df.isnull().sum() / len(df)) * 100
+    
+    # Identify columns where the missing percentage is over the threshold
+    columns_to_drop = missing_percentage[missing_percentage > threshold].index.tolist()
+    
+    # Drop those columns from the dataframe
+    df_cleaned = df.drop(columns=columns_to_drop)
+    
+    return df_cleaned
+
+
+def convert_columns_to_list(column_string):
+    """
+    Convert a string of column names separated by spaces or newlines into a Python list.
+    
+    Parameters:
+        column_string (str): A string containing column names separated by spaces or newlines.
+        
+    Returns:
+        list: A list of column names.
+    """
+    # Replace newlines with spaces and split the string into a list
+    return column_string.replace("\n", " ").split()
