@@ -141,3 +141,36 @@ def convert_columns_to_list(column_string):
     """
     # Replace newlines with spaces and split the string into a list
     return column_string.replace("\n", " ").split()
+
+
+import pandas as pd
+
+def impute_missing_values(df, columns, method='N'):
+    """
+    Impute missing values in the specified columns of the DataFrame using the given method.
+    
+    Parameters:
+        df (pd.DataFrame): The DataFrame to impute missing values in.
+        columns (list): A list of column names to impute missing values for.
+        method (str): The imputation method ('N', 'zero', 'mean', 'median').
+        
+    Returns:
+        pd.DataFrame: A new DataFrame with missing values imputed.
+    """
+    # Make a copy of the DataFrame to avoid modifying the original
+    df_copy = df.copy()
+    
+    if method == 'N':
+        df_copy[columns] = df_copy[columns].fillna('N')
+    elif method == 'zero':
+        df_copy[columns] = df_copy[columns].fillna(0)
+    elif method == 'mean':
+        for col in columns:
+            df_copy[col] = df_copy[col].fillna(df[col].mean())
+    elif method == 'median':
+        for col in columns:
+            df_copy[col] = df_copy[col].fillna(df[col].median())
+    else:
+        raise ValueError(f"Unknown method: {method}")
+    
+    return df_copy
