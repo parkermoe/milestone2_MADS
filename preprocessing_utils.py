@@ -105,23 +105,30 @@ def plot_missing_values(df):
 
     return fig.show()
 
-def remove_columns_over_threshold(df, threshold=20):
+import pandas as pd
+
+def remove_columns_over_threshold(df, threshold=20, exclude_cols=[]):
     """
-    Removes columns from the dataframe where missing values exceed the given threshold.
+    Removes columns from the dataframe where missing values exceed the given threshold,
+    except for columns in the exclude_cols list.
     
     Parameters:
-    - df: Input dataframe.
-    - threshold: Threshold percentage of missing values to decide column removal.
+        df (pd.DataFrame): Input dataframe.
+        threshold (float): Threshold percentage of missing values to decide column removal.
+        exclude_cols (list): List of columns to exclude from removal.
     
     Returns:
-    - df_cleaned: Dataframe after columns exceeding the threshold are removed.
+        pd.DataFrame: Dataframe after columns exceeding the threshold are removed.
     """
     
     # Calculate the percentage of missing values for each column
     missing_percentage = (df.isnull().sum() / len(df)) * 100
     
     # Identify columns where the missing percentage is over the threshold
-    columns_to_drop = missing_percentage[missing_percentage > threshold].index.tolist()
+    # and are not in the exclude_cols list
+    columns_to_drop = missing_percentage[
+        (missing_percentage > threshold) & (~missing_percentage.index.isin(exclude_cols))
+    ].index.tolist()
     
     # Drop those columns from the dataframe
     df_cleaned = df.drop(columns=columns_to_drop)
