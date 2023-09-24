@@ -1,0 +1,3 @@
+cred_rate_order = ['H', 'G', 'F', 'E', 'D', 'C', 'B', 'A']
+education_order = ['D', 'A', 'B', 'C']
+home_mkt_val_order = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S']
