@@ -181,3 +181,24 @@ def impute_missing_values(df, columns, method='N'):
         raise ValueError(f"Unknown method: {method}")
     
     return df_copy
+
+
+def map_categorical_values(df, column_mappings):
+    """
+    Map categorical values in specified columns to more descriptive labels.
+    
+    Parameters:
+        df (pd.DataFrame): The DataFrame to perform the mapping on.
+        column_mappings (dict): A dictionary where keys are column names and values
+                                are another dictionary for mapping.
+        
+    Returns:
+        pd.DataFrame: A new DataFrame with mapped values.
+    """
+    # Make a copy of the DataFrame to avoid modifying the original
+    df_copy = df.copy()
+    
+    for col, mapping in column_mappings.items():
+        df_copy[col] = df_copy[col].map(mapping).fillna("Unknown")
+        
+    return df_copy
