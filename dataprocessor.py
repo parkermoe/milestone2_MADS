@@ -14,15 +14,24 @@ class DataPreprocessor:
     
     @staticmethod
     def load_config(config_path):
-        """Load the JSON configuration file."""
+        """Load the JSON configuration file and convert keys to appropriate types."""
         print(f"Loading config from {config_path}")
         with open(config_path, 'r') as f:
-            return json.load(f)
-    
+            config = json.load(f)
+        
+        # Convert keys to integers where applicable
+        for col, mapping in config.get('column_mappings', {}).items():
+            new_mapping = {int(k) if k.isdigit() else k: v for k, v in mapping.items()}
+            config['column_mappings'][col] = new_mapping
+        
+        return config
+        
     def apply_config(self, skip_preprocess_dataframe=False):
         """Apply all the settings from the loaded JSON configuration."""
         print("Bleep bloop...")
         print("Applying config...")
+        self.replace_candidates()
+        self.drop_small_categories()
         self.standardize_missing_values()
         
         # Apply imputation strategies
@@ -33,6 +42,9 @@ class DataPreprocessor:
         # Apply categorical mappings
         self.map_categorical_values()
         self.map_party_code()
+        #self.replace_candidates()
+        #self.drop_small_categories()
+        self.engineer_features()
         
         # Remove columns over the threshold
         self.remove_columns_over_threshold(threshold=20)
@@ -56,6 +68,35 @@ class DataPreprocessor:
         self.df['PRFL_MINWAGE'] = self.df['PRFL_MINWAGE'].replace('N', 'UNKNOWN')
         self.df.drop(columns=["SURVEY_TYPE"], inplace=True)
         self.df.drop(columns=["RECORD_ID"], inplace=True)
+        # making sure HH_SIZE is an integer
+        
+
+    def engineer_features(self):
+        """Engineer new features in the DataFrame."""
+        print("Engineering new features...")
+        
+        # R_donor
+       # self.df['R_DONOR'] = ((self.df['FUND_POLIT'] == 'R') | (self.df['DON_POLCONS'] > '')).astype(int)
+        
+        # D_donor
+       # self.df['D_DONOR'] = ((self.df['FUND_POLIT'] == 'D') | (self.df['DON_POLLIB'] > '')).astype(int)
+        
+        # Voted_R_Election
+        vtr_columns_r = [col for col in self.df.columns if col.startswith('VTR_')]
+        condition_r = self.df[vtr_columns_r].isin(['R', 'P', 'X']).any(axis=1)
+        self.df['VOTED_R_ELECTION'] = condition_r.astype(int)
+        
+        # Voted_D_Election
+        vtr_columns_d = [col for col in self.df.columns if col.startswith('VTR_')]
+        condition_d = self.df[vtr_columns_d].isin(['D', 'M', 'Z']).any(axis=1)
+        self.df['VOTED_D_ELECTION'] = condition_d.astype(int)
+        
+        # Additional engineered features for unique county, congressional, state upper house & state lower house columns
+        self.df['STATE_COUNTY_FIPS'] = self.df['CENSUS_ST'].astype(str) + self.df['COUNTY_ST'].astype(str)
+        self.df['STATE_CD'] = self.df['CENSUS_ST'].astype(str) + self.df['CONG_DIST'].astype(str)
+        self.df['STATE_LOWER_HOUSE'] = self.df['CENSUS_ST'].astype(str) + self.df['ST_LO_HOUS'].astype(str)
+        self.df['STATE_UPPER_HOUSE'] = self.df['CENSUS_ST'].astype(str) + self.df['ST_UP_HOUS'].astype(str)
+        self.df['CENSUS_TRACT'] = self.df['CENSUS_ST'].astype(str) + self.df['COUNTY_ST'].astype(str)+ self.df['CENSUS_TRK'].astype(str)
 
     def impute_missing_values(self, columns, method='N'):
         print("Imputing missing values...")
@@ -79,12 +120,29 @@ class DataPreprocessor:
         column_mappings = self.config.get('column_mappings', {})
         for col, mapping in column_mappings.items():
             self.df[col] = self.df[col].map(mapping).fillna("Unknown")
+            #self.df[col] = self.df[col].astype(str).map(mapping).fillna("Unknown")
 
     def map_party_code(self):
         """Map and consolidate the party codes to simpler categories based on the config."""
         if 'PARTY_CODE' in self.config:
             party_mapping = self.config['PARTY_CODE']
             self.df['PARTY_CODE'] = self.df['PARTY_CODE'].map(party_mapping).fillna('Other')
+
+    def replace_candidates(self):
+        # Replacing specified candidates with broader categories
+        candidates_to_replace1 = self.config['candidates_to_replace1']
+        self.df['Q1_Candidate'] = self.df['Q1_Candidate'].replace(candidates_to_replace1, "Other GOP")
+        
+        candidates_to_replace2 = self.config['candidates_to_replace2']
+        self.df['Q1_Candidate'] = self.df['Q1_Candidate'].replace(candidates_to_replace2, "Other DEM")
+        
+        candidates_to_replace3 = self.config['candidates_to_replace3']
+        self.df['Q1_Candidate'] = self.df['Q1_Candidate'].replace(candidates_to_replace3, "Other/Undecided")
+
+    def drop_small_categories(self):
+        # Drop the 2 smallest categories to focus on the top 3
+        self.df = self.df[~self.df['Q1_Candidate'].isin(['Other/Undecided', 'Other DEM'])]
+
 
     def remove_columns_over_threshold(self, threshold=20):
         print("Removing columns over the threshold...")
@@ -95,6 +153,7 @@ class DataPreprocessor:
             (missing_percentage > threshold) & (~missing_percentage.index.isin(exclude_cols))
         ].index.tolist()
         self.df.drop(columns=columns_to_drop, inplace=True)
+        
     
     def preprocess_dataframe(self, use_frequency_encoding=True, drop_converted_cols=True):
         """Preprocesses the DataFrame based on the specified steps."""
@@ -105,19 +164,23 @@ class DataPreprocessor:
         #self.df['PRFL_MINWAGE'] = self.df['PRFL_MINWAGE'].replace('N', 'UNKNOWN')
 
         # one-Hot Encoding
-        one_hot_cols = [
-            'CENSUS_ST', 'AI_COUNTY_NAME', 'ADD_TYPE', 'CENSUS_TRK', 'CONG_DIST',
-            'COUNTY_TYPE', 'DON_CHARIT', 'DON_POLIT', 'ETHNIC_INFER',
-            'GENDER_MIX', 'GENERATION', 'HOMEOWNER', 'HOMEOWNRNT', 'LANGUAGE',
-            'LIFESTAGE_CLUSTER', 'PARTY_CODE', 'PARTY_MIX', 'PRESENCHLD', 'RELIGION',
-            'SEX', 'ST_LO_HOUS', 'ST_UP_HOUS', 'STATUS'
-        ]
-        
+      #  one_hot_cols = [
+      #      'CENSUS_ST', 'AI_COUNTY_NAME', 'ADD_TYPE', 'CENSUS_TRK', 'CONG_DIST',
+      #      'COUNTY_TYPE', 'DON_CHARIT', 'DON_POLIT', 'ETHNIC_INFER',
+      #      'GENDER_MIX', 'GENERATION', 'HOMEOWNER', 'HOMEOWNRNT', 'LANGUAGE',
+      #      'LIFESTAGE_CLUSTER', 'PARTY_CODE', 'PARTY_MIX', 'PRESENCHLD', 'RELIGION',
+      #      'SEX', 'ST_LO_HOUS', 'ST_UP_HOUS', 'STATUS'
+      #  ]
+        one_hot_cols = []
         #self.df = pd.get_dummies(self.df, columns=one_hot_cols, drop_first=True)
 
         # Handle PRFL_ columns
         prfl_cols = [col for col in self.df.columns if col.startswith('PRFL_')]
-        self.df = pd.get_dummies(self.df, columns=prfl_cols, drop_first=True)
+
+        # drop prfl_ columns
+        self.df.drop(columns=prfl_cols, inplace=True)
+
+        #self.df = pd.get_dummies(self.df, columns=prfl_cols, drop_first=True)
 
         vtr_cols = [col for col in self.df.columns if col.startswith('VTR_')]
         self.df = pd.get_dummies(self.df, columns=vtr_cols, drop_first=True)
@@ -138,10 +201,18 @@ class DataPreprocessor:
         self.df[int_cols] = self.df[int_cols].astype(int)
 
         # label Encoding
-        label_cols = ['CREDRATE', 'EDUCATION', 'HH_SIZE', 'HOMEMKTVAL', 'INCOMESTHH', 'NETWORTH']
+        label_cols = ['CREDRATE', 'EDUCATION', 'HH_SIZE', 'HOMEMKTVAL', 'INCOMESTHH', 'NETWORTH', 'STATE_CD',
+                      'STATE_LOWER_HOUSE', 'STATE_UPPER_HOUSE', 'CENSUS_TRACT','CENSUS_ST', 'AI_COUNTY_NAME', 'ADD_TYPE', 'CENSUS_TRK', 'CONG_DIST',
+            'COUNTY_TYPE', 'DON_CHARIT', 'DON_POLIT', 'ETHNIC_INFER',
+            'GENDER_MIX', 'GENERATION', 'HOMEOWNER', 'HOMEOWNRNT', 'LANGUAGE',
+            'LIFESTAGE_CLUSTER', 'PARTY_CODE', 'PARTY_MIX', 'PRESENCHLD', 'RELIGION',
+            'SEX', 'ST_LO_HOUS', 'ST_UP_HOUS', 'STATUS']
+        
+        le = LabelEncoder()
         for col in label_cols:
-            le = LabelEncoder()
-            self.df[col] = le.fit_transform(self.df[col])
+            #if self.df[col].dtype != 'object':
+                self.df[col] = self.df[col].astype(str)
+                self.df[col] = le.fit_transform(self.df[col])
 
         # drop Columns
         drop_cols = ['ETHNICCODE']
@@ -169,6 +240,8 @@ class DataPreprocessor:
             """Run the entire preprocessing pipeline in a specific order."""
             self.apply_config(skip_preprocess_dataframe=skip_preprocess_dataframe)
             self.df.drop(columns=['Unnamed: 0', 'RECORD_ID'], errors='ignore')
+            self.df['HH_SIZE'] = self.df['HH_SIZE'].astype(int)
+            self.df["VOTER_CNT"] = self.df["VOTER_CNT"].astype(int)
             
             if not skip_preprocess_dataframe and not self.has_preprocessed:
                 self.preprocess_dataframe(drop_converted_cols=drop_converted_cols, use_frequency_encoding=use_frequency_encoding)
