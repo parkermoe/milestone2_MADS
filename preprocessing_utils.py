@@ -465,3 +465,198 @@ def apply_skew_transformations(df, columns):
         else:  
             pass
     return transformed_df
+
+
+def set_inferred_party(row):
+   not_in_list = ['D', 'R', 'M', 'P', 'X', 'Z']
+   rpx = ['R', 'P', 'X']
+   dmz = ['D', 'M', 'Z']
+   if row['PARTY_CODE'] in ['N', 'U']:
+       if (
+           (row['FUND_POLIT'] == 'R' or row['DON_POLCONS'] or row['PRFL_HEALTHCARE_REFORM'] == '2' or
+            row['PRFL_2NDAMEND'] == 'Y' or row['PRFL_CHOICELIFE'] == '1') and row['FUND_POLIT'] != 'D' and
+            not row['DON_POLLIB'] and all(row[col] not in not_in_list for col in
+            ['VTR_PRI' + "{:02}".format(i) for i in range(22, 2, -1)] + ['VTR_PPP' + "{:02}".format(i) for i in [20, 16, 12, 8, 4, 0]])
+       ) or (
+           sum(1 for col in ['VTR_PRI' + "{:02}".format(i) for i in range(22, 2, -1)] + ['VTR_PPP' + "{:02}".format(i) for i in [20, 16, 12, 8, 4, 0]]
+            if row[col] in rpx) > sum(1 for col in ['VTR_PRI' + "{:02}".format(i) for i in range(22, 2, -1)] +
+            ['VTR_PPP' + "{:02}".format(i) for i in [20, 16, 12, 8, 4, 0]] if row[col] in dmz)
+       ):
+           return 'S'
+       elif (
+           (row['FUND_POLIT'] == 'D' or row['DON_POLLIB'] or row['PRFL_HEALTHCARE_REFORM'] == '1' or
+            row['PRFL_CHOICELIFE'] == '2') and row['FUND_POLIT'] != 'r' and not row['DON_POLCONS'] and
+            all(row[col] not in not_in_list for col in ['VTR_PRI' + "{:02}".format(i) for i in range(22, 2, -1)] +
+            ['VTR_PPP' + "{:02}".format(i) for i in [20, 16, 12, 8, 4, 0]])
+       ) or (
+           sum(1 for col in ['VTR_PRI' + "{:02}".format(i) for i in range(22, 2, -1)] + ['VTR_PPP' + "{:02}".format(i) for i in [20, 16, 12, 8, 4, 0]]
+            if row[col] in rpx) < sum(1 for col in ['VTR_PRI' + "{:02}".format(i) for i in range(22, 2, -1)] +
+            ['VTR_PPP' + "{:02}".format(i) for i in [20, 16, 12, 8, 4, 0]] if row[col] in dmz)
+       ):
+           return 'E'
+   return row['PARTY_CODE'] 
+
+
+
+from itertools import groupby
+from itertools import combinations
+
+def create_interaction_terms(df, combinations, interaction_type='cat'):
+    for combination in combinations:
+        # Create an interaction term name dynamically based on the number of features involved
+        interaction_term_name = "_".join(combination) + "_interaction"
+
+        if interaction_type == 'cat':
+            # Create the categorical interaction term
+            df[interaction_term_name] = df[list(combination)].astype(str).apply(lambda x: "_".join(x), axis=1)
+            
+        elif interaction_type == 'num':
+            # Create the numerical interaction term
+            df[interaction_term_name] = df[list(combination)].apply(lambda x: x.prod(), axis=1)
+
+    return df
+
+def feature_engineering_voting_data(survey_df, columns_to_use, interaction_type='cat', extend_columns=True):
+
+    # Define the vote types
+    democrat_votes = ['D', 'M', 'Z']
+    republican_votes = ['R', 'P', 'X']
+    early_votes = ['E', 'M', 'P']
+    absentee_votes = ['A', 'Z', 'X']
+
+    # Interaction terms for 2020
+   # survey_df['interaction_mult_2020'] = survey_df['CNSUS_PCTW'] * survey_df['TOD_PRES_R_2020_PREC']
+    survey_df['interaction_div_2020'] = survey_df['CNSUS_PCTW'] / survey_df['TOD_PRES_R_2020_PREC']
+   # survey_df['interaction_add_2020'] = survey_df['CNSUS_PCTW'] + survey_df['TOD_PRES_R_2020_PREC']
+
+    # Interaction terms for 2016
+  #  survey_df['interaction_mult_2016'] = survey_df['CNSUS_PCTW'] * survey_df['TOD_PRES_R_2016_PREC']
+    survey_df['interaction_div_2016'] = survey_df['CNSUS_PCTW'] / survey_df['TOD_PRES_R_2016_PREC']
+  #  survey_df['interaction_add_2016'] = survey_df['CNSUS_PCTW'] + survey_df['TOD_PRES_R_2016_PREC']
+
+    # Combined interaction terms
+   # survey_df['interaction_mult_combined'] = (survey_df['TOD_PRES_R_2016_PREC'] + survey_df['TOD_PRES_R_2020_PREC']) * survey_df['CNSUS_PCTW']
+
+    # Delta interaction term
+    survey_df['interaction_mult_delta'] = (survey_df['TOD_PRES_R_2020_PREC'] - survey_df['TOD_PRES_R_2016_PREC']) * survey_df['CNSUS_PCTW']
+
+    # Extend the list of columns to use in the model
+    if extend_columns:
+        columns_to_use.extend([
+            'interaction_div_2020',
+            'interaction_div_2016',  
+            'interaction_mult_delta',
+        #  'interaction_mult_2020',
+        #  'interaction_mult_2016'
+        ])
+
+    # Interaction terms for 2020 with respect to Democratic turnout
+   # survey_df['interaction_mult_D_2020'] = survey_df['CNSUS_PCTB'] * survey_df['TOD_PRES_D_2020_PREC']
+    survey_df['interaction_div_D_2020'] = survey_df['CNSUS_PCTB'] / survey_df['TOD_PRES_D_2020_PREC']
+   # survey_df['interaction_add_D_2020'] = survey_df['CNSUS_PCTB'] + survey_df['TOD_PRES_D_2020_PREC']
+
+    # Interaction terms for 2016 with respect to Democratic turnout
+   # survey_df['interaction_mult_D_2016'] = survey_df['CNSUS_PCTB'] * survey_df['TOD_PRES_D_2016_PREC']
+    survey_df['interaction_div_D_2016'] = survey_df['CNSUS_PCTB'] / survey_df['TOD_PRES_D_2016_PREC']
+   # survey_df['interaction_add_D_2016'] = survey_df['CNSUS_PCTB'] + survey_df['TOD_PRES_D_2016_PREC']
+
+    # Combined interaction terms for Democratic turnout
+    #survey_df['interaction_mult_D_combined'] = (survey_df['TOD_PRES_D_2016_PREC'] + survey_df['TOD_PRES_D_2020_PREC']) * survey_df['CNSUS_PCTB']
+
+    # Delta interaction term for Democratic turnout
+    survey_df['interaction_mult_D_delta'] = (survey_df['TOD_PRES_D_2020_PREC'] - survey_df['TOD_PRES_D_2016_PREC']) * survey_df['CNSUS_PCTB']
+
+    # Extend the list of columns to use in the model
+    if extend_columns:
+        columns_to_use.extend([
+            'interaction_div_D_2020',
+            'interaction_div_D_2016', 
+            'interaction_mult_D_delta'
+        ])
+
+    survey_df['Years_Voted_Democrat'] = survey_df[['VTR_PPP04', 'VTR_PPP08', 'VTR_PPP12', 'VTR_PPP16', 'VTR_PPP20']].apply(lambda x: sum(x.isin(['D', 'M', 'Z'])), axis=1)
+    survey_df['Years_Voted_Republican'] = survey_df[['VTR_PPP04', 'VTR_PPP08', 'VTR_PPP12', 'VTR_PPP16', 'VTR_PPP20']].apply(lambda x: sum(x.isin(['R', 'P', 'X'])), axis=1)
+
+    if extend_columns:
+        columns_to_use.extend(['Years_Voted_Democrat', 'Years_Voted_Republican'])
+
+
+    survey_df['Years_Absentee_Democrat'] = survey_df[['VTR_PPP04', 'VTR_PPP08', 'VTR_PPP12', 'VTR_PPP16', 'VTR_PPP20']].apply(lambda x: sum(x.isin(['Z'])), axis=1)
+    survey_df['Years_Early_Democrat'] = survey_df[['VTR_PPP04', 'VTR_PPP08', 'VTR_PPP12', 'VTR_PPP16', 'VTR_PPP20']].apply(lambda x: sum(x.isin(['M'])), axis=1)
+    survey_df['Years_Absentee_Republican'] = survey_df[['VTR_PPP04', 'VTR_PPP08', 'VTR_PPP12', 'VTR_PPP16', 'VTR_PPP20']].apply(lambda x: sum(x.isin(['X'])), axis=1)
+    survey_df['Years_Early_Republican'] = survey_df[['VTR_PPP04', 'VTR_PPP08', 'VTR_PPP12', 'VTR_PPP16', 'VTR_PPP20']].apply(lambda x: sum(x.isin(['P'])), axis=1)
+
+    # 'Years_Absentee_Democrat', 'Years_Absentee_Republican',
+    if extend_columns:
+        columns_to_use.extend(['Years_Early_Democrat', 'Years_Early_Republican', 'Years_Absentee_Democrat', 'Years_Absentee_Republican'])
+
+    primary_columns = ['VTR_PRI06', 'VTR_PRI10', 'VTR_PRI14', 'VTR_PRI16', 'VTR_PRI18', 'VTR_PRI20', 'VTR_PRI21', 'VTR_PRI22']
+    survey_df['Years_Voted_Democrat_Primaries'] = survey_df[primary_columns].apply(lambda x: sum(x.isin(['D', 'M', 'Z'])), axis=1)
+    survey_df['Years_Voted_Republican_Primaries'] = survey_df[primary_columns].apply(lambda x: sum(x.isin(['R', 'P', 'X'])), axis=1)
+    survey_df['Years_Early_Democrat_Primaries'] = survey_df[primary_columns].apply(lambda x: sum(x.isin(['M'])), axis=1)
+    survey_df['Years_Early_Republican_Primaries'] = survey_df[primary_columns].apply(lambda x: sum(x.isin(['P'])), axis=1)
+
+    if extend_columns:
+        columns_to_use.extend(['Years_Voted_Democrat_Primaries', 'Years_Voted_Republican_Primaries', 'Years_Early_Democrat_Primaries', 'Years_Early_Republican_Primaries'])
+
+  #  for col in primary_columns:
+  #      columns_to_use.remove(col)
+    
+    # function to count specific vote types
+    def count_votes(vote_counts, vote_types):
+        return sum(vote_counts.get(vote_type, 0) for vote_type in vote_types)
+
+    # function to count longest streak for a party
+    def longest_streak(votes, party_votes):
+        streaks = [sum(1 for _ in g) for k, g in groupby(votes) if k in party_votes]
+        return max(streaks) if streaks else 0
+
+    # count early and absentee votes
+    survey_df['count_Early'] = survey_df.filter(like='VTR_GEN').apply(lambda row: count_votes(row.value_counts(), early_votes), axis=1)
+    survey_df['count_Absentee'] = survey_df.filter(like='VTR_GEN').apply(lambda row: count_votes(row.value_counts(), absentee_votes), axis=1)
+    
+    if extend_columns:
+        columns_to_use.extend(['count_Early', 'count_Absentee'])
+
+
+
+    for prefix in ['VTR_GEN', 'VTR_PPP', 'VTR_PRI']:
+        survey_df[f'count_D_{prefix}'] = survey_df.filter(like=prefix).apply(lambda row: count_votes(row.value_counts(), democrat_votes), axis=1)
+        survey_df[f'count_R_{prefix}'] = survey_df.filter(like=prefix).apply(lambda row: count_votes(row.value_counts(), republican_votes), axis=1)
+        
+        if extend_columns:
+            columns_to_use.extend([f'count_R_{prefix}'])
+            columns_to_use.extend([f'count_D_{prefix}'])
+            #[f'count_D_{prefix}', f'count_R_{prefix}'])
+
+        # Count longest streak of consistent voting for each party
+        survey_df[f'longest_streak_D_{prefix}'] = survey_df.filter(like=prefix).apply(lambda row: longest_streak(row.tolist(), democrat_votes), axis=1)
+        survey_df[f'longest_streak_R_{prefix}'] = survey_df.filter(like=prefix).apply(lambda row: longest_streak(row.tolist(), republican_votes), axis=1)
+        
+        if extend_columns:
+            columns_to_use.extend([f'longest_streak_D_{prefix}', f'longest_streak_R_{prefix}'])
+
+    #survey_df['recent_party_2022'] = survey_df['VTR_GEN22'].apply(lambda x: 'D' if x in democrat_votes else ('R' if x in republican_votes else 'Other'))
+    #survey_df['recent_party_2020'] = survey_df['VTR_GEN18'].apply(lambda x: 'D' if x in democrat_votes else ('R' if x in republican_votes else 'Other'))
+   # columns_to_use.extend(['recent_party_2022'])
+
+    survey_df['total_votes'] = survey_df.filter(like='VTR_').apply(lambda row: sum(row != 'N'), axis=1)
+    
+    if extend_columns:
+        columns_to_use.append('total_votes')
+    #columns_to_use.remove("count_R_VTR_GEN")
+
+    #feature_combinations = [
+    #['PRFL_LIBERAL_NEWS', 'PRFL_IMMIGRATION_REFORM'] ]
+
+    #survey_df = create_interaction_terms(survey_df, feature_combinations, interaction_type)
+    
+    # Add the new interaction term columns to your columns_to_use list
+    #new_columns = ["_".join(combination) + "_interaction" for combination in feature_combinations]
+   # columns_to_use.extend(new_columns)
+
+    # drop count_D_VTR_GEN
+   # columns_to_use.remove('count_D_VTR_GEN')
+
+    
+    return survey_df, columns_to_use
