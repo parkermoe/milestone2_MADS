@@ -110,8 +110,7 @@
             "VTR_PRI19",
             "VTR_PRI20",
             "VTR_PRI21",
-            "VTR_PRI22",
-            "APP_CHILD"
+            "VTR_PRI22"
         ],
         "impute_strategy": "N"
     },
