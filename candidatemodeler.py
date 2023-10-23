@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import VotingClassifier
@@ -34,8 +34,6 @@ from xgboost import XGBClassifier
 from tqdm import tqdm
 from time import sleep
 from category_encoders import TargetEncoder
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder
-from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
@@ -83,12 +81,15 @@ class ModelTrainingPipeline:
         self.best_params_dict = {}
         self.trained_models = []
         self.loaded_params = {}
+        self.hyperparameters = None
         self.log_file = "experiment_logs.csv"
         with open('hyperparameters.json', 'r') as f:
             self.default_param_grids = json.load(f)
 
 
     def prepare_data(self, encoding_type='target'):
+        if self.df is None:
+            raise ValueError("self.df is None. Please initialize it with a valid DataFrame before calling this method.")
         print("Starting data preparation...")
         
         # Store the encoding type
@@ -96,7 +97,14 @@ class ModelTrainingPipeline:
         
         # Drop unnecessary columns
         self.df = self.df.drop(columns=['Unnamed: 0', "RECORD_ID"], errors='ignore')
-        
+
+        self.df.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+        # Optionally, add a NaN check or imputation here
+        nan_check = self.df.isna().sum()
+        if nan_check.any():
+            print("Warning: NaN values detected. Consider imputation.")
+            
         # Identify the prefix of the chosen target column
         target_prefix = "_".join(self.target_col.split("_")[:-1])
         
@@ -152,6 +160,19 @@ class ModelTrainingPipeline:
         # Save intermediate data if flag is set
         if self.save_intermediate_data:
             self.intermediate_data['Encoded_Data'] = self.df.copy()
+
+
+    def get_training_data(self):
+        if hasattr(self, 'X_train') and hasattr(self, 'y_train'):
+            return self.X_train.copy(), self.y_train.copy()
+        else:
+            raise AttributeError("Training data has not been initialized. Call `prepare_data` first.")
+
+    def get_test_data(self):
+        if hasattr(self, 'X_test') and hasattr(self, 'y_test'):
+            return self.X_test.copy(), self.y_test.copy()
+        else:
+            raise AttributeError("Test data has not been initialized. Call `prepare_data` first.")
 
     def create_preprocessing_pipeline(self, scale_data=True, feature_engineering=None,kmeans_n_clusters=8, pca_n_components=7):
         # Basic imputers
@@ -248,7 +269,7 @@ class ModelTrainingPipeline:
                                     ('RF', RandomForestClassifier(random_state=42)),
                                     ('XGBoost', XGBClassifier(random_state=42)),
                                     ('LogisticRegression', LogisticRegression(penalty='l1', solver='liblinear', C=1.0, random_state=42)),
-                                    ('SVM', SVC(C=1.0, kernel='rbf', random_state=42, probability=True, degree=3)),
+                                    ('SVM', SVC(C=1.0, kernel='rbf', random_state=42, probability=True)),
                                     ('GBC', GradientBoostingClassifier(random_state=42))],
                                                                 voting='soft'))])
         elif model_type == 'Stacked':
@@ -785,7 +806,7 @@ class ModelTrainingPipeline:
                 preds = model.predict(new_data)  # This will apply all the steps in the pipeline
                 predictions[model_type] = preds
                # Model-specific comments
-                if model_type == "RandomForest":
+                if model_type == "RF":
                     print("Ah, the forest is dense but full of wisdom.")
                 elif model_type == "SVM":
                     print("Support vectors to the rescue!")
