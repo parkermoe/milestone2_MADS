@@ -1,0 +1,23 @@
+{
+    "RF": {
+        "classifier__n_estimators": 100,
+        "classifier__max_depth": 10
+    },
+    "LogisticRegression": {
+        "classifier__C": 1.0,
+        "classifier__penalty": "l1"
+    },
+    "XGBoost": {
+        "classifier__learning_rate": 0.1,
+        "classifier__n_estimators": 100
+    },
+    "SVM": {
+        "classifier__C": 0.01,
+        "classifier__gamma": 50,
+        "classifier__kernel": "rbf"
+    },
+    "GBC": {
+        "classifier__learning_rate": 0.1,
+        "classifier__n_estimators": 100
+    }
+}
